@@ -1,0 +1,97 @@
+<?php
+
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Menu\MenuLinkInterface;
+use Drupal\taxonomy\TermInterface;
+use Drupal\taxonomy_menu\Plugin\Derivative\TaxonomyMenuMenuLink;
+
+/**
+ * Implements hook_preprocess_menu().
+ */
+function custom_taxonomy_menu_preprocess_menu(&$variables) {
+  // Vérifie si le menu est le menu cible.
+  if ($variables['menu_name'] === 'blog') {
+    // Récupère le gestionnaire d'entités.
+    $entity_type_manager = \Drupal::service('entity_type.manager');
+
+    // Récupère le référentiel de termes de taxonomie.
+    $taxonomy_term_storage = $entity_type_manager->getStorage('taxonomy_term');
+    // Parcourez tous les éléments de menu.
+    _custom_taxonomy_menu_filter_items($variables['items'], $taxonomy_term_storage);
+  }
+}
+
+function _custom_taxonomy_menu_filter_items(&$items, $taxonomy_term_storage) {
+  foreach ($items as $key => &$item) {
+    if (_custom_taxonomy_menu_is_taxonomy_link($item['original_link'])) {
+      $term = $taxonomy_term_storage->load($item['original_link']->getMetaData()['taxonomy_term_id']);
+      $has_content = _custom_taxonomy_menu_has_content($term);
+      if (!empty($item['below'])) {
+        _custom_taxonomy_menu_filter_items($item['below'], $taxonomy_term_storage);
+        $has_child_content = _custom_taxonomy_menu_has_child_content($item['below'], $taxonomy_term_storage);
+      } else {
+        $has_child_content = false;
+      }
+      if (!$has_content && !$has_child_content) {
+        unset($items[$key]);
+      }
+    }
+  }
+}
+
+function _custom_taxonomy_menu_has_child_content($items, $taxonomy_term_storage) {
+  foreach ($items as $item) {
+    if (_custom_taxonomy_menu_is_taxonomy_link($item['original_link'])) {
+      $term = $taxonomy_term_storage->load($item['original_link']->getMetaData()['taxonomy_term_id']);
+      if ($term && _custom_taxonomy_menu_has_content($term)) {
+        return true;
+      }
+      if (!empty($item['below'])) {
+        return _custom_taxonomy_menu_has_child_content($item['below'], $taxonomy_term_storage);
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Helper function to determine if a menu item is a taxonomy link.
+ *
+ * @param \Drupal\Core\Menu\MenuLinkInterface $item
+ *   The menu item to check.
+ *
+ * @return bool
+ *   Returns TRUE if the menu item is a taxonomy link, FALSE otherwise.
+ */
+function _custom_taxonomy_menu_is_taxonomy_link($item) {
+  return isset($item->getMetaData()['taxonomy_term_id']);
+}
+
+
+/**
+ * Helper function to check if a taxonomy term has associated content.
+ *
+ * @param  $term
+ *   The taxonomy term to check.
+ *
+ * @return bool
+ *   Returns TRUE if the taxonomy term has associated content, FALSE otherwise.
+ */
+function _custom_taxonomy_menu_has_content(TermInterface $term)
+{
+  // Récupère le gestionnaire d'entités.
+  $entity_type_manager = \Drupal::service('entity_type.manager');
+
+  // Récupère le référentiel de nœuds.
+  $node_storage = $entity_type_manager->getStorage('node');
+
+  // Vérifie si le terme a du contenu associé.
+  $query = $node_storage->getQuery()
+    ->condition('status', 1)
+    ->condition('field_categorie_blog', $term->id())
+    ->range(0, 1);
+
+  $result = $query->execute();
+
+  return !empty($result);
+}

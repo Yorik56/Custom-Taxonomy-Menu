@@ -1,0 +1,5 @@
+name: Custom Taxonomy Menu
+description: Modifie les liens du menu Taxonomy pour ne pas afficher les termes sans contenu associé.
+package: Custom
+type: module
+core_version_requirement: ^8 || ^9
